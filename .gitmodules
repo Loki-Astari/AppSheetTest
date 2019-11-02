@@ -2,3 +2,7 @@
 	path = third/ThorsSerializer
 	url = https://github.com/Loki-Astari/ThorsSerializer.git
 	branch = header-only
+[submodule "third/ThorsStream"]
+	path = third/ThorsStream
+	url = git@github.com:Loki-Astari/ThorsStream.git
+	branch = header-only
