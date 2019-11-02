@@ -5,6 +5,7 @@
 #include <memory>
 #include <algorithm>
 #include <regex>
+#include <mutex>
 
 #include "ThorSerialize/Traits.h"
 #include "ThorSerialize/SerUtil.h"
@@ -87,6 +88,12 @@ class UserJob: public Job<User>
         {
             // Check if the phone number is OK.
             if (std::regex_search(user.number, phoneNumber)) {
+
+                // Mutex shared across all objects (notice the static).
+                static std::mutex  mutex;
+
+                // Lock the mutex when modifying "users"
+                std::lock_guard<std::mutex>   lock(mutex);
 
                 // Add the user to a heap.
                 // The heap is ordered by youngest person.
