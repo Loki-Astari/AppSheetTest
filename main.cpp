@@ -45,6 +45,7 @@ const auto youngestUser = [](User const& lhs, User const& rhs){return lhs.age < 
 const auto nameTest     = [](User const& lhs, User const& rhs){return lhs.name < rhs.name;};
 
 // Set up List and User to be read from JSON stream.
+// See: jsonImport() and jsonExport() below
 ThorsAnvil_MakeTrait(List, result, token);
 ThorsAnvil_MakeTrait(User, id, name, age, number, photo, bio);
 
@@ -130,7 +131,6 @@ class ListJob: public Job<List>
 
 int main()
 {
-    using ThorsAnvil::Stream::IThorStream;
     std::vector<User>   users;
 
     std::async([&users, job = std::make_unique<ListJob>(apiList)](){job->run(users);});
