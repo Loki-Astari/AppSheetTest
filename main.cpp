@@ -2,6 +2,7 @@
 #include <future>
 #include <vector>
 #include <string>
+#include <memory>
 
 #include "ThorSerialize/Traits.h"
 #include "ThorSerialize/SerUtil.h"
@@ -10,13 +11,14 @@
 
 using namespace std::string_literals;
 
-class List
+const std::string api       = "https://appsheettest1.azurewebsites.net/sample"s;
+const std::string apiList   = api + "/list"s;
+const std::string apiDetail = api + "/detail/"s;
+
+struct List
 {
-    private:
-        std::vector<int>        result;
-        std::string             token;
-        friend class ThorsAnvil::Serialize::Traits<List>;
-    public:
+    std::vector<int>                result;
+    std::unique_ptr<std::string>    token;
 };
 
 class User
@@ -65,7 +67,10 @@ class ListJob: public Job<List>
         virtual void processesData(List const& data) override
         {
             using ThorsAnvil::Serialize::jsonExport;
-            std::cout << jsonExport(data) << "\n";
+            std::cout << jsonExport(data);
+            if (data.token.get()) {
+                std::async([job = std::make_unique<ListJob>(apiList + "?token=" + *data.token)](){job->run();});
+            }
         }
 };
 class UserJob: public Job<User>
@@ -79,10 +84,6 @@ class UserJob: public Job<User>
 int main()
 {
     using ThorsAnvil::Stream::IThorStream;
-
-    const std::string api       = "https://appsheettest1.azurewebsites.net/sample"s;
-    const std::string apiList   = api + "/list"s;
-    const std::string apiDetail = api + "/detail/"s;
 
     std::async([job = std::make_unique<ListJob>(apiList)](){job->run();});
 
