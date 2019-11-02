@@ -1,7 +1,14 @@
 #include <iostream>
+#include <future>
+#include <vector>
+#include <string>
+
 #include "ThorSerialize/Traits.h"
+#include "ThorSerialize/SerUtil.h"
 #include "ThorSerialize/JsonThor.h"
 #include "ThorsStream/ThorsStream.h"
+
+using namespace std::string_literals;
 
 class List
 {
@@ -28,26 +35,55 @@ class User
 ThorsAnvil_MakeTrait(List, result, token);
 ThorsAnvil_MakeTrait(User, id, name, age, number, photo, bio);
 
+template<typename T>
+class Job
+{
+    ThorsAnvil::Stream::IThorStream     istream;
+    public:
+        Job(std::string const& url)
+            : istream(url)
+        {}
+        virtual ~Job()
+        {}
+
+        void run()
+        {
+            using ThorsAnvil::Serialize::jsonImport;
+            T data;
+            istream >> jsonImport(data);
+
+            processesData(data);
+        }
+
+        virtual void processesData(T const& data) = 0;
+};
+
+class ListJob: public Job<List>
+{
+    public:
+        using Job<List>::Job;
+        virtual void processesData(List const& data) override
+        {
+            using ThorsAnvil::Serialize::jsonExport;
+            std::cout << jsonExport(data) << "\n";
+        }
+};
+class UserJob: public Job<User>
+{
+    public:
+        virtual void processesData(User const& /*data*/) override
+        {
+        }
+};
 
 int main()
 {
-    using ThorsAnvil::Serialize::jsonExport;
-    using ThorsAnvil::Serialize::jsonImport;
     using ThorsAnvil::Stream::IThorStream;
 
+    const std::string api       = "https://appsheettest1.azurewebsites.net/sample"s;
+    const std::string apiList   = api + "/list"s;
+    const std::string apiDetail = api + "/detail/"s;
 
-    std::cout << "App Sheet Test\n";
-    std::stringstream testStream;
-    testStream << R"({"id":1,"name":"bill","age":39,"number":"555-555-5555","photo":"https://appsheettest1.azurewebsites.net/male-16.jpg","bio":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ex sapien, interdum sit amet tempor sit amet, pretium id neque. Nam ultricies ac felis ut lobortis. Praesent ac purus vitae est dignissim sollicitudin. Duis iaculis tristique euismod. Nulla tellus libero, gravida sit amet nisi vitae, ultrices venenatis turpis. Morbi ut dui nunc."})";
+    std::async([job = std::make_unique<ListJob>(apiList)](){job->run();});
 
-    std::cout << testStream.str() << "\n";
-
-    User    user1;
-    testStream >> jsonImport(user1);
-    std::cout << jsonExport(user1) << "\n";
-
-
-    IThorStream stream("https://appsheettest1.azurewebsites.net/sample/detail/12");
-    stream >> jsonImport(user1);
-    std::cout << jsonExport(user1) << "\n";
 }
