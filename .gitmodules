@@ -1,0 +1,4 @@
+[submodule "third/ThorsSerializer"]
+	path = third/ThorsSerializer
+	url = https://github.com/Loki-Astari/ThorsSerializer.git
+	branch = header-only

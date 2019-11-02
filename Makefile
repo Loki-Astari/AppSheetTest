@@ -1,4 +1,5 @@
 
+CXXFLAGS	+= -std=c++17 -Ithird/ThorsSerializer/
 CXXFLAGS	+= -Wall -Wextra -Wstrict-aliasing -pedantic -Werror -Wunreachable-code -Wno-long-long -Wno-unknown-pragmas
 
 SRC			= $(wildcard *.cpp)
