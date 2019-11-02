@@ -52,12 +52,26 @@ class Job
         {
             using ThorsAnvil::Serialize::jsonImport;
             T data;
-            istream >> jsonImport(data);
-
-            processesData(data);
+            if (istream >> jsonImport(data)) {
+                processesData(data);
+            }
+            else {
+                // Do some error handling
+            }
         }
 
         virtual void processesData(T const& data) = 0;
+};
+
+class UserJob: public Job<User>
+{
+    public:
+        using Job<User>::Job;
+        virtual void processesData(User const& user) override
+        {
+            using ThorsAnvil::Serialize::jsonExport;
+            std::cout << jsonExport(user);
+        }
 };
 
 class ListJob: public Job<List>
@@ -71,13 +85,9 @@ class ListJob: public Job<List>
             if (data.token.get()) {
                 std::async([job = std::make_unique<ListJob>(apiList + "?token=" + *data.token)](){job->run();});
             }
-        }
-};
-class UserJob: public Job<User>
-{
-    public:
-        virtual void processesData(User const& /*data*/) override
-        {
+            for(auto const& userId: data.result) {
+                std::async([job = std::make_unique<UserJob>(apiDetail + std::to_string(userId))](){job->run();});
+            }
         }
 };
 
