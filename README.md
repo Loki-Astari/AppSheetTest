@@ -3,8 +3,8 @@
 
 ### Build instructions.
 
-    ./configure
-    make
+    > ./configure
+    > make
 
 ### Requirements
 
