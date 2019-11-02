@@ -1,6 +1,7 @@
 #include <iostream>
 #include "ThorSerialize/Traits.h"
 #include "ThorSerialize/JsonThor.h"
+#include "ThorsStream/ThorsStream.h"
 
 class List
 {
@@ -32,6 +33,8 @@ int main()
 {
     using ThorsAnvil::Serialize::jsonExport;
     using ThorsAnvil::Serialize::jsonImport;
+    using ThorsAnvil::Stream::IThorStream;
+
 
     std::cout << "App Sheet Test\n";
     std::stringstream testStream;
@@ -41,5 +44,10 @@ int main()
 
     User    user1;
     testStream >> jsonImport(user1);
+    std::cout << jsonExport(user1) << "\n";
+
+
+    IThorStream stream("https://appsheettest1.azurewebsites.net/sample/detail/12");
+    stream >> jsonImport(user1);
     std::cout << jsonExport(user1) << "\n";
 }
