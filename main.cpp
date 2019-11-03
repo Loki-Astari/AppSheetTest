@@ -128,7 +128,9 @@ class ListJob: public Job<List>
                 run(users);
             }
             else {
-                /* Wait for all children */
+                for(auto& future: userFutures) {
+                    future.wait();
+                }
             }
         }
 };
