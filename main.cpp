@@ -18,7 +18,7 @@ using namespace std::string_literals;
 const std::string api       = "https://appsheettest1.azurewebsites.net/sample"s;
 const std::string apiList   = api + "/list"s;
 const std::string apiDetail = api + "/detail/"s;
-const std::regex  phoneNumber("^[0-9][0-9][0-9][- ][0-9][0-9][0-9][- ][0-9][0-9][0-9][0-9]$");
+const std::regex  phoneNumber("^[0-9]{3}[- ][0-9]{3}[- ][0-9]{4}$");
 const int         maxParrallelism = 20;
 
 // In this app List and User
