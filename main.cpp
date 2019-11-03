@@ -66,81 +66,93 @@ class Job
         virtual ~Job()
         {}
 
-        void run(std::vector<User>& result)
+        void run()
         {
             using ThorsAnvil::Serialize::jsonImport;
             T data;
             if (istream >> jsonImport(data)) {
-                processesData(result, data);
+                processesData(data);
             }
             else {
                 // Do some error handling
             }
         }
 
-        virtual void processesData(std::vector<User>& result, T const& data) = 0;
+        virtual void processesData(T const& data) = 0;
 };
 
 // A job to handle the details from getting a user object.
 class UserJob: public Job<User>
 {
+    std::vector<User>&      users;
     public:
-        using Job<User>::Job;
-        virtual void processesData(std::vector<User>& users, User const& user) override
-        {
-            // Check if the phone number is OK.
-            if (std::regex_search(user.number, phoneNumber)) {
-
-                // Mutex shared across all objects (notice the static).
-                static std::mutex  mutex;
-
-                // Lock the mutex when modifying "users"
-                std::lock_guard<std::mutex>   lock(mutex);
-
-                // Add the user to a heap.
-                // The heap is ordered by youngest person.
-                users.emplace_back(std::move(user));
-                std::push_heap(users.begin(), users.end(), youngestUser);
-                if (users.size() == 6) {
-                    // If we have more than 5 people the pop the oldest one off.
-                    // Thus we maintain a heap of the 5 youngest people.
-                    std::pop_heap(users.begin(), users.end(), youngestUser);
-                    users.pop_back();
-                }
-            }
-        }
+        UserJob(std::string const& url, std::vector<User>& users)
+            : Job(url)
+            , users(users)
+        {}
+        virtual void processesData(User const& user) override;
 };
 
 // A job to handle the list object.
 class ListJob: public Job<List>
 {
-    std::vector<std::future<void>>            userFutures;
+    std::vector<std::future<void>>      userFutures;
+    std::vector<User>&                  users;
     public:
-        using Job<List>::Job;
-        virtual void processesData(std::vector<User>& users, List const& data) override
-        {
-            for(auto const& userId: data.result) {
-                // For each user add a job ("UserJob") to the async queue.
-                userFutures.emplace_back(std::async([&users, job = std::make_unique<UserJob>(apiDetail + std::to_string(userId))](){job->run(users);}));
-            }
-            if (data.token.get()) {
-                istream = ThorsAnvil::Stream::IThorStream(apiList + "?token=" + *data.token);
-                run(users);
-            }
-            else {
-                for(auto& future: userFutures) {
-                    future.wait();
-                }
-            }
-        }
+        ListJob(std::string const& url, std::vector<User>& users)
+            : Job(url)
+            , users(users)
+        {}
+        virtual void processesData(List const& data) override;
 };
+
+void UserJob::processesData(User const& user)
+{
+    // Check if the phone number is OK.
+    if (std::regex_search(user.number, phoneNumber)) {
+
+        // Mutex shared across all objects (notice the static).
+        static std::mutex  mutex;
+
+        // Lock the mutex when modifying "users"
+        std::lock_guard<std::mutex>   lock(mutex);
+
+        // Add the user to a heap.
+        // The heap is ordered by youngest person.
+        users.emplace_back(std::move(user));
+        std::push_heap(users.begin(), users.end(), youngestUser);
+        if (users.size() == 6) {
+            // If we have more than 5 people the pop the oldest one off.
+            // Thus we maintain a heap of the 5 youngest people.
+            std::pop_heap(users.begin(), users.end(), youngestUser);
+            users.pop_back();
+        }
+    }
+}
+
+void ListJob::processesData(List const& data)
+{
+    for(auto const& userId: data.result) {
+        // For each user add a job ("UserJob") to the async queue.
+        userFutures.emplace_back(std::async([job = std::make_unique<UserJob>(apiDetail + std::to_string(userId), users)](){job->run();}));
+    }
+    if (data.token.get()) {
+        istream = ThorsAnvil::Stream::IThorStream(apiList + "?token=" + *data.token);
+        run();
+    }
+    else {
+        for(auto& future: userFutures) {
+            future.wait();
+        }
+    }
+}
 
 int main()
 {
     std::vector<User>   users;
 
-    ListJob listJob(apiList);
-    listJob.run(users);
+    ListJob listJob(apiList, users);
+    listJob.run();
 
     std::sort(users.begin(), users.end(), nameTest);
     using ThorsAnvil::Serialize::jsonExport;
