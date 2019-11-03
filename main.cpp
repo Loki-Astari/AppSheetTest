@@ -42,7 +42,9 @@ struct User
 };
 
 // Set up comparison functions used on user.
-const auto youngestUser = [](User const& lhs, User const& rhs){return lhs.age < rhs.age;};
+// Note: youngestUser uses both name and age. This is because if we have a lot of people at the same age we want to keep the
+//       lexicographically lowest names as we eventually will sort by name.
+const auto youngestUser = [](User const& lhs, User const& rhs){return std::forward_as_tuple(lhs.age, lhs.name) < std::forward_as_tuple(rhs.age, rhs.name);};
 const auto nameTest     = [](User const& lhs, User const& rhs){return lhs.name < rhs.name;};
 
 // Set up List and User to be read from JSON stream.
