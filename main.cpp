@@ -22,7 +22,7 @@ const std::regex  phoneNumber("^[0-9][0-9][0-9][- ][0-9][0-9][0-9][- ][0-9][0-9]
 const int         maxParrallelism = 20;
 
 // In this app List and User
-// are simply property bags no nead to have access functions.
+// are simply property bags no need to have access functions.
 // If this was a more complex app then we would consider having other methods.
 struct List
 {
@@ -121,7 +121,6 @@ class JobHolder
         {}
         void addJob(int userId)
         {
-            // Lock the mutex when modifying "users"
             std::unique_lock<std::mutex>     lock(mutex);
 
             // No more jobs if we are waiting.
@@ -141,7 +140,6 @@ class JobHolder
         {
             if (std::regex_search(user.number, phoneNumber)) {
 
-                // Lock the mutex when modifying "users"
                 std::unique_lock<std::mutex>   lock(mutex);
 
                 // Add the user to a heap.
