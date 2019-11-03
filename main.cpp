@@ -19,6 +19,7 @@ const std::string api       = "https://appsheettest1.azurewebsites.net/sample"s;
 const std::string apiList   = api + "/list"s;
 const std::string apiDetail = api + "/detail/"s;
 const std::regex  phoneNumber("^[0-9][0-9][0-9][- ][0-9][0-9][0-9][- ][0-9][0-9][0-9][0-9]$");
+const int         maxParrallelism = 20;
 
 // In this app List and User
 // are simply property bags no nead to have access functions.
@@ -81,69 +82,127 @@ class Job
         virtual void processesData(T const& data) = 0;
 };
 
+class JobHolder;
+
 // A job to handle the details from getting a user object.
 class UserJob: public Job<User>
 {
-    std::vector<User>&      users;
+    JobHolder&      jobHolder;
     public:
-        UserJob(std::string const& url, std::vector<User>& users)
+        UserJob(std::string const& url, JobHolder& jobHolder)
             : Job(url)
-            , users(users)
+            , jobHolder(jobHolder)
         {}
         virtual void processesData(User const& user) override;
+};
+
+class JobHolder
+{
+    std::vector<User>&                          users;
+    std::map<int, std::future<void>>            userFutures;
+    std::mutex                                  mutex;
+    std::condition_variable                     cond;
+    int                                         lastFinished;
+    bool                                        justWaiting;
+    public:
+        JobHolder(std::vector<User>& users)
+            : users(users)
+            , lastFinished(-1)
+            , justWaiting(false)
+        {}
+        void addJob(int userId)
+        {
+            // Lock the mutex when modifying "users"
+            std::unique_lock<std::mutex>     lock(mutex);
+
+            // No more jobs if we are waiting.
+            if (justWaiting) {
+                return; 
+            }
+
+            // We don't want to add more then maxParrallelism
+            // simply because we don't want userFutures to blow up in memory to infinite size.
+            // Note: Behind the scenes the parallelism is controlled for us by the implementation.
+            cond.wait(lock, [&userFutures = this->userFutures](){return userFutures.size() < maxParrallelism;});
+
+            // Start async job to create and handle connection.
+            userFutures.emplace(userId, std::async([job = std::make_unique<UserJob>(apiDetail + std::to_string(userId), *this)](){job->run();}));
+        }
+        void addResult(User const& user)
+        {
+            if (std::regex_search(user.number, phoneNumber)) {
+
+                // Lock the mutex when modifying "users"
+                std::unique_lock<std::mutex>   lock(mutex);
+
+                // Add the user to a heap.
+                // The heap is ordered by youngest person.
+                users.emplace_back(std::move(user));
+                std::push_heap(users.begin(), users.end(), youngestUser);
+                if (users.size() == 6) {
+                    // If we have more than 5 people the pop the oldest one off.
+                    // Thus we maintain a heap of the 5 youngest people.
+                    std::pop_heap(users.begin(), users.end(), youngestUser);
+                    users.pop_back();
+                }
+
+                // If we are waiting then a thread is in waitForAllJobs
+                // So we can't remove items from the userFutures as it is being used.
+                if (!justWaiting) {
+                    if (lastFinished != -1) {
+                        // Note: Can't remove the current one (user.id)
+                        //       As we are still in the thread that the future belongs too.
+                        //       So we remove the last lastFinished and note this lastFinished
+                        //       so it will be removed next time.
+                        userFutures.erase(lastFinished);
+                        cond.notify_one();
+                    }
+                    lastFinished = user.id;
+                }
+            }
+        }
+        void waitForAllJobs()
+        {
+            {
+                std::unique_lock<std::mutex>     lock(mutex);
+                justWaiting = true;
+            }
+
+            for(auto& future: userFutures) {
+                future.second.wait();
+            }
+        }
 };
 
 // A job to handle the list object.
 class ListJob: public Job<List>
 {
-    std::vector<std::future<void>>      userFutures;
-    std::vector<User>&                  users;
+    JobHolder   jobHolder;
     public:
-        ListJob(std::string const& url, std::vector<User>& users)
+        ListJob(std::string const& url, std::vector<User>& result)
             : Job(url)
-            , users(users)
+            , jobHolder(result)
         {}
         virtual void processesData(List const& data) override;
 };
 
 void UserJob::processesData(User const& user)
 {
-    // Check if the phone number is OK.
-    if (std::regex_search(user.number, phoneNumber)) {
-
-        // Mutex shared across all objects (notice the static).
-        static std::mutex  mutex;
-
-        // Lock the mutex when modifying "users"
-        std::lock_guard<std::mutex>   lock(mutex);
-
-        // Add the user to a heap.
-        // The heap is ordered by youngest person.
-        users.emplace_back(std::move(user));
-        std::push_heap(users.begin(), users.end(), youngestUser);
-        if (users.size() == 6) {
-            // If we have more than 5 people the pop the oldest one off.
-            // Thus we maintain a heap of the 5 youngest people.
-            std::pop_heap(users.begin(), users.end(), youngestUser);
-            users.pop_back();
-        }
-    }
+    jobHolder.addResult(user);
 }
 
 void ListJob::processesData(List const& data)
 {
     for(auto const& userId: data.result) {
         // For each user add a job ("UserJob") to the async queue.
-        userFutures.emplace_back(std::async([job = std::make_unique<UserJob>(apiDetail + std::to_string(userId), users)](){job->run();}));
+        jobHolder.addJob(userId);
     }
     if (data.token.get()) {
         istream = ThorsAnvil::Stream::IThorStream(apiList + "?token=" + *data.token);
         run();
     }
     else {
-        for(auto& future: userFutures) {
-            future.wait();
-        }
+        jobHolder.waitForAllJobs();
     }
 }
 
