@@ -69,17 +69,24 @@ class Job
 
         void run()
         {
-            using ThorsAnvil::Serialize::jsonImport;
-            T data;
-            if (istream >> jsonImport(data)) {
-                processesData(data);
+            bool hasMore = false;
+            do
+            {
+                T data;
+                using ThorsAnvil::Serialize::jsonImport;
+                if (istream >> jsonImport(data)) {
+                    processesData(data);
+                    hasMore = moreData(data);
+                }
+                else {
+                    // Do some error handling
+                }
             }
-            else {
-                // Do some error handling
-            }
+            while(hasMore);
         }
 
         virtual void processesData(T const& data) = 0;
+        virtual bool moreData(T const&) {return false;}
 };
 
 class JobHolder;
@@ -184,6 +191,7 @@ class ListJob: public Job<List>
             , jobHolder(result)
         {}
         virtual void processesData(List const& data) override;
+        virtual bool moreData(List const& data) override;
 };
 
 void UserJob::processesData(User const& user)
@@ -197,12 +205,17 @@ void ListJob::processesData(List const& data)
         // For each user add a job ("UserJob") to the async queue.
         jobHolder.addJob(userId);
     }
+}
+
+bool ListJob::moreData(List const& data)
+{
     if (data.token.get()) {
         istream = ThorsAnvil::Stream::IThorStream(apiList + "?token=" + *data.token);
-        run();
+        return true;
     }
     else {
         jobHolder.waitForAllJobs();
+        return false;
     }
 }
 
