@@ -57,7 +57,8 @@ ThorsAnvil_MakeTrait(User, id, name, age, number, photo, bio);
 template<typename T>
 class Job
 {
-    ThorsAnvil::Stream::IThorStream     istream;
+    protected:
+        ThorsAnvil::Stream::IThorStream     istream;
     public:
         Job(std::string const& url)
             : istream(url)
@@ -113,18 +114,21 @@ class UserJob: public Job<User>
 // A job to handle the list object.
 class ListJob: public Job<List>
 {
+    std::vector<std::future<void>>            userFutures;
     public:
         using Job<List>::Job;
         virtual void processesData(std::vector<User>& users, List const& data) override
         {
-            if (data.token.get()) {
-                // If we have a continuation token
-                // Then add another job ("ListJob") to the async queue.
-                std::async([&users, job = std::make_unique<ListJob>(apiList + "?token=" + *data.token)](){job->run(users);});
-            }
             for(auto const& userId: data.result) {
                 // For each user add a job ("UserJob") to the async queue.
-                std::async([&users, job = std::make_unique<UserJob>(apiDetail + std::to_string(userId))](){job->run(users);});
+                userFutures.emplace_back(std::async([&users, job = std::make_unique<UserJob>(apiDetail + std::to_string(userId))](){job->run(users);}));
+            }
+            if (data.token.get()) {
+                istream = ThorsAnvil::Stream::IThorStream(apiList + "?token=" + *data.token);
+                run(users);
+            }
+            else {
+                /* Wait for all children */
             }
         }
 };
@@ -133,8 +137,8 @@ int main()
 {
     std::vector<User>   users;
 
-    std::async([&users, job = std::make_unique<ListJob>(apiList)](){job->run(users);});
-    // This will not return until all async jobs have completed.
+    ListJob listJob(apiList);
+    listJob.run(users);
 
     std::sort(users.begin(), users.end(), nameTest);
     using ThorsAnvil::Serialize::jsonExport;
