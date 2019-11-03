@@ -138,10 +138,9 @@ class JobHolder
         }
         void addResult(User const& user)
         {
+            std::unique_lock<std::mutex>   lock(mutex);
+
             if (std::regex_search(user.number, phoneNumber)) {
-
-                std::unique_lock<std::mutex>   lock(mutex);
-
                 // Add the user to a heap.
                 // The heap is ordered by youngest person.
                 users.emplace_back(std::move(user));
@@ -152,20 +151,20 @@ class JobHolder
                     std::pop_heap(users.begin(), users.end(), youngestUser);
                     users.pop_back();
                 }
+            }
 
-                // If we are waiting then a thread is in waitForAllJobs
-                // So we can't remove items from the userFutures as it is being used.
-                if (!justWaiting) {
-                    if (lastFinished != -1) {
-                        // Note: Can't remove the current one (user.id)
-                        //       As we are still in the thread that the future belongs too.
-                        //       So we remove the last lastFinished and note this lastFinished
-                        //       so it will be removed next time.
-                        userFutures.erase(lastFinished);
-                        cond.notify_one();
-                    }
-                    lastFinished = user.id;
+            // If we are waiting then a thread is in waitForAllJobs
+            // So we can't remove items from the userFutures as it is being used.
+            if (!justWaiting) {
+                if (lastFinished != -1) {
+                    // Note: Can't remove the current one (user.id)
+                    //       As we are still in the thread that the future belongs too.
+                    //       So we remove the last lastFinished and note this lastFinished
+                    //       so it will be removed next time.
+                    userFutures.erase(lastFinished);
+                    cond.notify_one();
                 }
+                lastFinished = user.id;
             }
         }
         void waitForAllJobs()
